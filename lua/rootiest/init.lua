@@ -212,10 +212,10 @@ M.leader = vim.fn.readfile(config_path .. "/.leader")[1]
 -- Setup function to initialize the plugin
 function M.setup()
 	M.set_defaults()
-	M.define_commands()
 	M.eval_settings_files()
 	M.eval_dependencies()
 	M.eval_neovide()
+	M.define_commands()
 	M.define_autocorrections()
 	M.restore_colorscheme()
 	M.set_cursor_icons()
