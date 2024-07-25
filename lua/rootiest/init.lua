@@ -4,12 +4,6 @@ local M = {}
 local precog_first_time = true
 local config_path = vim.fn.stdpath("config")
 
--- Set Default Leader Key
-function M.set_defaults()
-	vim.g.mapleader = " "
-	vim.g.maplocalleader = "\\"
-end
-
 -- Ensure required settings files exist with default values
 function M.eval_settings_files()
 	local function ensure_file_exists(file_path, default_value, setup_func)
@@ -208,7 +202,6 @@ end
 
 -- Setup function to initialize the plugin
 function M.setup()
-	M.set_defaults()
 	M.eval_settings_files()
 	M.eval_dependencies()
 	M.eval_neovide()
