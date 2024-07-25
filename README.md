@@ -1,38 +1,74 @@
 # rootiest.nvim
 
-A Neovim plugin for various utilities and settings.
+`rootiest.nvim` is a Neovim plugin designed to enhance your editing experience
+with several useful utilities and configurations.
 
-**This plugin is in early development.**
+## Features
 
-It is intended to provide additional refinements on top of the LazyVim distribution.
+- Manage and restore colorschemes
+- Various utility functions like yanking lines without whitespace,
+checking terminal type, etc.
+- Support for Neovide and additional plugins like precognition and hardtime
 
 ## Installation
 
-Using `lazy.nvim`:
+Using `lazy.nvim`, add the plugin to your configuration:
 
 ```lua
 require("lazy").setup({
-  {
-    "rootiest/rootiest.nvim",
-    config = true,
-  }
+    {
+        "rootiest/rootiest.nvim",
+    },
 })
 ```
 
-## Usage
+## Configuration
 
-- **`:RestoreColorscheme`**: Restore the colorscheme. (executed at startup)
-- **`:Q`**: Close all buffers.
-- **`:YankLine`**: Yank the current line without leading/trailing whitespace.
-- **`:LoadRemote`**: Start the nvim-remote plugin.
+You can configure the `rootiest` plugin by passing a table of options to `require("rootiest").setup()`.
 
-## Optional Dependencies
+### Default Values
 
-- **`SmoothCursor.nvim`**: Provides custom cursor icons.  
-  This plugin is optional but recommended for a better experience.  
-  If you have `SmoothCursor.nvim` installed,
-  the `set_cursor_icons` function in `rootiest` will configure custom cursor icons.
+The default values for `rootiest` configuration are:
+
+```lua
+local config = {
+    colorscheme = "default", -- Default colorscheme
+}
+```
+
+### Example Configuration
+
+To manually set all default values (though they are already set by default),
+use the following `lazy.nvim` configuration:
+
+```lua
+require("lazy").setup({
+    {
+        "rootiest/rootiest.nvim",
+        config = function()
+            require("rootiest").setup({
+                colorscheme = "default", -- Specify your preferred colorscheme here
+            })
+        end,
+    },
+})
+```
+
+## Commands
+
+- **`:SetColorscheme <name>`**: Set the colorscheme and save it to the settings file.
+- **`:RestoreColorscheme`**: Restore the colorscheme from the settings file.
+
+## Autocommands
+
+- **ColorScheme**: Automatically updates the colorscheme in the settings file
+when the colorscheme changes.
 
 ## License
 
-MIT
+`rootiest.nvim` is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or
+submit a pull request to the [GitHub repository](https://github.com/rootiest/rootiest.nvim).

@@ -11,15 +11,7 @@ function M.ensure_settings_file()
 	end
 
 	if vim.fn.filereadable(settings_file) ~= 1 then
-		local default_settings = {
-			aitool = "codeium",
-			useimage = true,
-			wakatime = true,
-			hardtime = false,
-			ignore_deps = false,
-			colorscheme = vim.g.colors_name or "default",
-		}
-		local json = vim.fn.json_encode(default_settings)
+		local json = vim.fn.json_encode({ colorscheme = M.config.colorscheme })
 		vim.fn.writefile({ json }, settings_file)
 	end
 end
@@ -31,12 +23,15 @@ function M.load_settings()
 		M.ensure_settings_file()
 		json_content = vim.fn.readfile(settings_file)[1]
 	end
-	M.settings = vim.fn.json_decode(json_content)
+	local settings = vim.fn.json_decode(json_content)
+	if settings.colorscheme then
+		M.config.colorscheme = settings.colorscheme
+	end
 end
 
 -- Save settings to the settings file
 function M.save_settings()
-	local json = vim.fn.json_encode(M.settings)
+	local json = vim.fn.json_encode({ colorscheme = M.config.colorscheme })
 	vim.fn.writefile({ json }, settings_file)
 end
 
@@ -54,7 +49,7 @@ function M.restore_colorscheme()
 		return ok
 	end
 
-	local colortheme = M.settings.colorscheme
+	local colortheme = M.config.colorscheme
 	local fallback_themes = { "catppuccin-frappe", "tokyonight", "default" }
 
 	if colortheme and is_colorscheme_available(colortheme) then
@@ -120,13 +115,6 @@ function M.toggle_lazygit_term()
 	end
 end
 
--- Function to check if a given string matches the content of the aitool setting
-function M.using_aitool(input)
-	local normalized_content = M.settings.aitool:lower():gsub("%s+", "")
-	local normalized_input = input:lower():gsub("%s+", "")
-	return normalized_input == normalized_content
-end
-
 -- Load remote-nvim plugin
 function M.load_remote()
 	if pcall(require, "remote-nvim") then
@@ -151,7 +139,7 @@ end
 -- Evaluate dependencies and print warnings if needed
 function M.eval_dependencies()
 	local function should_suppress_warnings()
-		return M.settings.ignore_deps
+		return false
 	end
 
 	local function check_executable(executable)
@@ -182,38 +170,19 @@ end
 
 -- Define user commands to change settings
 function M.define_setting_commands()
-	vim.api.nvim_create_user_command("SetAITool", function(opts)
-		local value = opts.args:lower()
-		local valid_values = { codeium = true, copilot = true, tabnine = true, minuet = true, none = true }
-		if valid_values[value] then
-			M.settings.aitool = value
-			M.save_settings()
-			vim.api.nvim_out_write("AITool set to " .. value .. "\n")
-		else
-			vim.api.nvim_err_writeln(
-				"Invalid value for AITool. Valid options are: codeium, copilot, tabnine, minuet, none"
-			)
-		end
+	vim.api.nvim_create_user_command("SetColorscheme", function(opts)
+		local value = opts.args
+		M.config.colorscheme = value
+		M.save_settings()
+		vim.api.nvim_out_write("Colorscheme set to " .. value .. "\n")
 	end, {
 		nargs = 1,
-		complete = function(_, _, _)
-			return { "codeium", "copilot", "tabnine", "minuet", "none" }
-		end,
-		desc = "Set AITool option",
+		desc = "Set Colorscheme option",
 	})
 
-	local function create_toggle_command(setting)
-		vim.api.nvim_create_user_command("Toggle" .. setting:gsub("^%l", string.upper), function()
-			M.settings[setting] = not M.settings[setting]
-			M.save_settings()
-			vim.api.nvim_out_write(setting .. " set to " .. tostring(M.settings[setting]) .. "\n")
-		end, { desc = "Toggle " .. setting })
-	end
-
-	local toggle_settings = { "useimage", "wakatime", "hardtime", "ignore_deps" }
-	for _, setting in ipairs(toggle_settings) do
-		create_toggle_command(setting)
-	end
+	vim.api.nvim_create_user_command("RestoreColorscheme", function()
+		M.restore_colorscheme()
+	end, { desc = "Restore colorscheme" })
 end
 
 -- Define user commands
@@ -226,32 +195,67 @@ function M.define_commands()
 		M.yank_line()
 	end, { force = true, desc = "Yank line without leading whitespace" })
 
-	vim.api.nvim_create_user_command("RestoreColorscheme", function()
-		M.restore_colorscheme()
-	end, { desc = "Restore colorscheme" })
-
-	vim.api.nvim_create_user_command("LoadRemote", function()
-		M.load_remote()
-	end, { force = true, desc = "Load/start Remote" })
-
 	M.define_setting_commands()
 end
 
+function M.define_autocommands()
+	-- Autosave Colorscheme
+	-- When the colorscheme changes, store the name in .colorscheme
+	vim.api.nvim_create_autocmd("ColorScheme", {
+		desc = "Store colorscheme name",
+		callback = function()
+			M.config.colorscheme = vim.g.colors_name
+			M.save_settings()
+		end,
+	})
+	-- Define cursor color/icon based on mode
+	local autocmd = vim.api.nvim_create_autocmd
+	autocmd({ "ModeChanged", "BufEnter" }, {
+		callback = function()
+			local current_mode = vim.fn.mode()
+			if current_mode == "n" then
+				vim.api.nvim_set_hl(0, "SmoothCursor", { fg = "#8aa8f3" })
+				vim.fn.sign_define("smoothcursor", { text = "" })
+			elseif current_mode == "v" then
+				vim.api.nvim_set_hl(0, "SmoothCursor", { fg = "#d298eb" })
+				vim.fn.sign_define("smoothcursor", { text = "" })
+			elseif current_mode == "V" then
+				vim.api.nvim_set_hl(0, "SmoothCursor", { fg = "#d298eb" })
+				vim.fn.sign_define("smoothcursor", { text = "" })
+			elseif current_mode == "�" then
+				vim.api.nvim_set_hl(0, "SmoothCursor", { fg = "#bf616a" })
+				vim.fn.sign_define("smoothcursor", { text = "" })
+			elseif current_mode == "i" then
+				vim.api.nvim_set_hl(0, "SmoothCursor", { fg = "#9bd482" })
+				vim.fn.sign_define("smoothcursor", { text = "" })
+			end
+		end,
+	})
+end
+
+---@class Config
+---@field colorscheme string Default colorscheme
+local config = {
+	colorscheme = "default", -- Default colorscheme
+}
+
+---@type Config
+M.config = config
+
 -- Setup function to initialize the plugin
-function M.setup()
+---@param args Config?
+M.setup = function(args)
+	M.config = vim.tbl_deep_extend("force", M.config, args or {})
+
 	M.ensure_settings_file()
 	M.init_settings()
 	M.eval_dependencies()
 	M.eval_neovide()
 	M.define_commands()
+	M.define_autocommands()
 	M.define_autocorrections()
 	M.restore_colorscheme()
 	M.set_cursor_icons()
-end
-
--- Provide a function to be called by lazy.nvim
-function M.config()
-	M.setup()
 end
 
 return M
