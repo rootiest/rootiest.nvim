@@ -45,11 +45,17 @@ function M.eval_settings_files()
 	end
 
 	ensure_file_exists(config_path .. "/.colorscheme", nil, setup_colorscheme)
+	-- Load Stored Leader Key
+	M.leader = vim.fn.readfile(config_path .. "/.leader")[1]
 end
 
 -- Restore colorscheme
 function M.restore_colorscheme()
 	vim.cmd.colorscheme(M.colortheme or "catppuccin-frappe" or "tokyonight")
+	-- Load the kitty theme
+	M.kitty_theme = os.getenv("KITTY_THEME")
+	-- Load the stored colorscheme
+	M.colortheme = vim.fn.readfile(config_path .. "/.colorscheme")[1]
 end
 
 -- Yank line without leading/trailing whitespace
@@ -199,15 +205,6 @@ function M.define_commands()
 		M.load_remote()
 	end, { force = true, desc = "Load/start Remote" })
 end
-
--- Load the kitty theme
-M.kitty_theme = os.getenv("KITTY_THEME")
-
--- Load the stored colorscheme
-M.colortheme = vim.fn.readfile(config_path .. "/.colorscheme")[1]
-
--- Load Stored Leader Key
-M.leader = vim.fn.readfile(config_path .. "/.leader")[1]
 
 -- Setup function to initialize the plugin
 function M.setup()
