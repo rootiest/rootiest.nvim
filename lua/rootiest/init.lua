@@ -1,55 +1,74 @@
--- ~/.config/nvim/lua/rootiest/init.lua
 local M = {}
 
 local precog_first_time = true
-local config_path = vim.fn.stdpath("config")
+local data_path = vim.fn.stdpath("data") .. "/lazy/rootiest.nvim"
+local settings_file = data_path .. "/settings.json"
 
--- Ensure required settings files exist with default values
-function M.eval_settings_files()
-	local function ensure_file_exists(file_path, default_value, setup_func)
-		if vim.fn.filereadable(file_path) ~= 1 then
-			if setup_func then
-				setup_func()
-			else
-				vim.fn.writefile({ default_value }, file_path)
-			end
-		end
+-- Ensure the settings file exists with default values
+function M.ensure_settings_file()
+	if vim.fn.isdirectory(data_path) ~= 1 then
+		vim.fn.mkdir(data_path, "p")
 	end
 
-	local defaults = {
-		[config_path .. "/.aitool"] = "codeium",
-		[config_path .. "/.useimage"] = "true",
-		[config_path .. "/.wakatime"] = "true",
-		[config_path .. "/.hardtime"] = "false",
-		[config_path .. "/.ignore-deps"] = "false",
-		[config_path .. "/.leader"] = vim.g.mapleader,
-	}
-
-	local function setup_colorscheme()
-		local color_file = config_path .. "/.colorscheme"
-		if M.kitty_theme then
-			vim.fn.writefile({ M.kitty_theme }, color_file)
-		else
-			vim.fn.writefile({ vim.g.colors_name }, color_file)
-		end
+	if vim.fn.filereadable(settings_file) ~= 1 then
+		local default_settings = {
+			aitool = "codeium",
+			useimage = true,
+			wakatime = true,
+			hardtime = false,
+			ignore_deps = false,
+			colorscheme = vim.g.colors_name or "default",
+		}
+		local json = vim.fn.json_encode(default_settings)
+		vim.fn.writefile({ json }, settings_file)
 	end
+end
 
-	for file_path, default_value in pairs(defaults) do
-		ensure_file_exists(file_path, default_value)
+-- Load settings from the settings file
+function M.load_settings()
+	local json_content = vim.fn.readfile(settings_file)[1]
+	if not json_content then
+		M.ensure_settings_file()
+		json_content = vim.fn.readfile(settings_file)[1]
 	end
+	M.settings = vim.fn.json_decode(json_content)
+end
 
-	ensure_file_exists(config_path .. "/.colorscheme", nil, setup_colorscheme)
-	-- Load Stored Leader Key
-	M.leader = vim.fn.readfile(config_path .. "/.leader")[1]
+-- Save settings to the settings file
+function M.save_settings()
+	local json = vim.fn.json_encode(M.settings)
+	vim.fn.writefile({ json }, settings_file)
+end
+
+-- Initialize settings
+function M.init_settings()
+	M.load_settings()
 end
 
 -- Restore colorscheme
 function M.restore_colorscheme()
-	vim.cmd.colorscheme(M.colortheme or "catppuccin-frappe" or "tokyonight")
+	local function is_colorscheme_available(name)
+		local ok, _ = pcall(function()
+			vim.cmd("colorscheme " .. name)
+		end)
+		return ok
+	end
+
+	local colortheme = M.settings.colorscheme
+	local fallback_themes = { "catppuccin-frappe", "tokyonight", "default" }
+
+	if colortheme and is_colorscheme_available(colortheme) then
+		vim.cmd.colorscheme(colortheme)
+	else
+		for _, theme in ipairs(fallback_themes) do
+			if is_colorscheme_available(theme) then
+				vim.cmd.colorscheme(theme)
+				break
+			end
+		end
+	end
 	-- Load the kitty theme
 	M.kitty_theme = os.getenv("KITTY_THEME")
-	-- Load the stored colorscheme
-	M.colortheme = vim.fn.readfile(config_path .. "/.colorscheme")[1]
 end
 
 -- Yank line without leading/trailing whitespace
@@ -101,20 +120,9 @@ function M.toggle_lazygit_term()
 	end
 end
 
--- Function to check if a given string matches the content of the .aitool file
+-- Function to check if a given string matches the content of the aitool setting
 function M.using_aitool(input)
-	local aitool_file = config_path .. "/.aitool"
-
-	-- Ensure the .aitool file exists
-	if vim.fn.filereadable(aitool_file) ~= 1 then
-		vim.fn.writefile({ "codeium" }, aitool_file)
-	end
-
-	-- Read the file and normalize its content
-	local content = vim.fn.readfile(aitool_file)[1] or ""
-	local normalized_content = content:lower():gsub("%s+", "")
-
-	-- Normalize the input and compare
+	local normalized_content = M.settings.aitool:lower():gsub("%s+", "")
 	local normalized_input = input:lower():gsub("%s+", "")
 	return normalized_input == normalized_content
 end
@@ -136,23 +144,14 @@ function M.set_cursor_icons()
 	vim.fn.sign_define("smoothcursor_v", { text = "" })
 	vim.fn.sign_define("smoothcursor_V", { text = "" })
 	vim.fn.sign_define("smoothcursor_i", { text = "" })
-	vim.fn.sign_define("smoothcursor_�", { text = "" })
+	vim.fn.sign_define("smoothcursor_c", { text = "" })
 	vim.fn.sign_define("smoothcursor_R", { text = "󰊄" })
 end
 
 -- Evaluate dependencies and print warnings if needed
 function M.eval_dependencies()
 	local function should_suppress_warnings()
-		local ignore_file = config_path .. "/.ignore-deps"
-		local file = io.open(ignore_file, "r")
-		if file then
-			local content = file:read("*a")
-			file:close()
-			content = content:lower():gsub("%s+", "")
-			local suppress_values = { ["true"] = true, ["1"] = true, ["yes"] = true }
-			return suppress_values[content] or false
-		end
-		return false
+		return M.settings.ignore_deps
 	end
 
 	local function check_executable(executable)
@@ -181,6 +180,42 @@ function M.define_autocorrections()
 	require("rootiest.autospell")
 end
 
+-- Define user commands to change settings
+function M.define_setting_commands()
+	vim.api.nvim_create_user_command("SetAITool", function(opts)
+		local value = opts.args:lower()
+		local valid_values = { codeium = true, copilot = true, tabnine = true, minuet = true, none = true }
+		if valid_values[value] then
+			M.settings.aitool = value
+			M.save_settings()
+			vim.api.nvim_out_write("AITool set to " .. value .. "\n")
+		else
+			vim.api.nvim_err_writeln(
+				"Invalid value for AITool. Valid options are: codeium, copilot, tabnine, minuet, none"
+			)
+		end
+	end, {
+		nargs = 1,
+		complete = function(_, _, _)
+			return { "codeium", "copilot", "tabnine", "minuet", "none" }
+		end,
+		desc = "Set AITool option",
+	})
+
+	local function create_toggle_command(setting)
+		vim.api.nvim_create_user_command("Toggle" .. setting:gsub("^%l", string.upper), function()
+			M.settings[setting] = not M.settings[setting]
+			M.save_settings()
+			vim.api.nvim_out_write(setting .. " set to " .. tostring(M.settings[setting]) .. "\n")
+		end, { desc = "Toggle " .. setting })
+	end
+
+	local toggle_settings = { "useimage", "wakatime", "hardtime", "ignore_deps" }
+	for _, setting in ipairs(toggle_settings) do
+		create_toggle_command(setting)
+	end
+end
+
 -- Define user commands
 function M.define_commands()
 	vim.api.nvim_create_user_command("Q", function()
@@ -198,18 +233,20 @@ function M.define_commands()
 	vim.api.nvim_create_user_command("LoadRemote", function()
 		M.load_remote()
 	end, { force = true, desc = "Load/start Remote" })
+
+	M.define_setting_commands()
 end
 
 -- Setup function to initialize the plugin
 function M.setup()
-	M.eval_settings_files()
+	M.ensure_settings_file()
+	M.init_settings()
 	M.eval_dependencies()
 	M.eval_neovide()
 	M.define_commands()
 	M.define_autocorrections()
 	M.restore_colorscheme()
 	M.set_cursor_icons()
-	vim.g.mapleader = M.leader
 end
 
 -- Provide a function to be called by lazy.nvim
